@@ -2,7 +2,7 @@ import * as ort from 'onnxruntime-web';
 import * as fs from 'fs';
 import * as path from 'path';
 
-const EMBEDDING_DIM = 512;
+let activeEmbeddingDim = 512;
 const MODEL_CACHE_DIR = process.env.TRANSFORMERS_CACHE || path.join(process.env.HOME || '/tmp', '.cache', 'huggingface', 'hub');
 const BGE_QUERY_PREFIX = '为这个句子生成表示以用于检索相关文章：';
 
@@ -16,6 +16,7 @@ let vocab: Map<string, number> = new Map();
 let cjkWords: Set<string> = new Set();
 let initPromise: Promise<void> | null = null;
 let initError: string | null = null;
+let activeModelName = 'Xenova/bge-small-zh-v1.5';
 
 const downloadFile = async (url: string, destPath: string): Promise<void> => {
   const dir = path.dirname(destPath);
@@ -31,14 +32,15 @@ const downloadFile = async (url: string, destPath: string): Promise<void> => {
   fs.writeFileSync(destPath, buffer);
 };
 
-const ensureModelFiles = async (): Promise<string> => {
-  const modelDir = path.join(MODEL_CACHE_DIR, 'models--Xenova--bge-small-zh-v1.5', 'snapshots', 'default');
+const ensureModelFiles = async (modelName: string): Promise<string> => {
+  const sanitizedModelName = modelName.replace(/\//g, '--');
+  const modelDir = path.join(MODEL_CACHE_DIR, `models--${sanitizedModelName}`, 'snapshots', 'default');
 
   if (fs.existsSync(path.join(modelDir, 'onnx', 'model.onnx')) && fs.existsSync(path.join(modelDir, 'tokenizer.json'))) {
     return modelDir;
   }
 
-  const baseUrl = 'https://huggingface.co/Xenova/bge-small-zh-v1.5/resolve/main';
+  const baseUrl = `https://huggingface.co/${modelName}/resolve/main`;
   const files: Array<{ url: string; dest: string }> = [
     { url: `${baseUrl}/onnx/model.onnx`, dest: path.join(modelDir, 'onnx', 'model.onnx') },
     { url: `${baseUrl}/tokenizer.json`, dest: path.join(modelDir, 'tokenizer.json') },
@@ -184,13 +186,15 @@ const tokenize = (text: string): { inputIds: number[]; attentionMask: number[]; 
   return { inputIds, attentionMask, tokenTypeIds };
 };
 
-export const ensureInitialized = async (): Promise<void> => {
-  if (session && vocab.size > 0) return;
-  if (initPromise) return initPromise;
+export const ensureInitialized = async (modelName?: string): Promise<void> => {
+  const targetModel = modelName || activeModelName;
+  if (session && vocab.size > 0 && targetModel === activeModelName) return;
+  if (initPromise && targetModel === activeModelName) return initPromise;
 
+  activeModelName = targetModel;
   initPromise = (async () => {
     try {
-      const modelDir = await ensureModelFiles();
+      const modelDir = await ensureModelFiles(targetModel);
 
       ort.env.wasm.wasmPaths = undefined;
       ort.env.wasm.numThreads = 1;
@@ -205,7 +209,7 @@ export const ensureInitialized = async (): Promise<void> => {
       cjkWords = loaded.cjkWords;
 
       initError = null;
-      console.log(`[LocalEmbedding] Model loaded: dim=${EMBEDDING_DIM}, vocab=${vocab.size}, cjkWords=${cjkWords.size}, session=${session.inputNames}`);
+      console.log(`[LocalEmbedding] Model loaded: activeModelName=${activeModelName}, vocab=${vocab.size}, cjkWords=${cjkWords.size}`);
     } catch (e: any) {
       initError = e?.message || String(e);
       console.error(`[LocalEmbedding] Failed to initialize:`, e);
@@ -220,7 +224,7 @@ export const isReady = (): boolean => session !== null && vocab.size > 0;
 
 export const getLastError = (): string | null => initError;
 
-export const getEmbeddingDim = (): number => EMBEDDING_DIM;
+export const getEmbeddingDim = (): number => activeEmbeddingDim;
 
 export const embed = async (text: string, isQuery: boolean = false): Promise<number[]> => {
   await ensureInitialized();
@@ -247,6 +251,8 @@ export const embed = async (text: string, isQuery: boolean = false): Promise<num
 
   const data = lastHidden.data as Float32Array;
   const hiddenDim = lastHidden.dims[2];
+  
+  activeEmbeddingDim = hiddenDim;
 
   const pooled = new Float32Array(hiddenDim);
   let maskSum = 0;

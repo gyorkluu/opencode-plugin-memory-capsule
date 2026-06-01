@@ -164,12 +164,15 @@ export const MemoryCapsulePlugin: Plugin = async (ctx, options) => {
   };
 
   const getEmbedding = async (text: string, isQuery: boolean = false): Promise<number[]> => {
-    try {
-      if (LocalEmbedding.isReady()) {
-        return await LocalEmbedding.embed(text, isQuery);
+    if (config.useLocalEmbedding) {
+      try {
+        await LocalEmbedding.ensureInitialized(config.localEmbeddingModel);
+        if (LocalEmbedding.isReady()) {
+          return await LocalEmbedding.embed(text, isQuery);
+        }
+      } catch (e) {
+        log(`[getEmbedding] Local model (${config.localEmbeddingModel}) failed, falling back: ${e}`, 'warn');
       }
-    } catch (e) {
-      log(`[getEmbedding] Local model failed, falling back to API: ${e}`, 'warn');
     }
 
     const apiConfig = await resolveApiConfig();
@@ -475,11 +478,15 @@ ${selectedParts.join('\n\n---\n\n')}
 
   log(`[init] Initializing CapsuleEngine with project: ${projectDir}`, 'info');
 
-  LocalEmbedding.ensureInitialized().then(() => {
-    log(`[init] Local embedding model ready, dim=${LocalEmbedding.getEmbeddingDim()}`, 'info');
-  }).catch((e) => {
-    log(`[init] Local embedding model failed to load: ${e}. Will fallback to API or deterministic embedding.`, 'warn');
-  });
+  if (config.useLocalEmbedding) {
+    LocalEmbedding.ensureInitialized(config.localEmbeddingModel).then(() => {
+      log(`[init] Local embedding model (${config.localEmbeddingModel}) ready, dim=${LocalEmbedding.getEmbeddingDim()}`, 'info');
+    }).catch((e) => {
+      log(`[init] Local embedding model (${config.localEmbeddingModel}) failed to load: ${e}. Will fallback.`, 'warn');
+    });
+  } else {
+    log(`[init] Local embedding model is disabled. Using API embedding fallback.`, 'info');
+  }
 
   engine.syncFromCodebaseMarkdown(projectDir, getEmbedding, log)
     .then(() => loadProjectKnowledge())

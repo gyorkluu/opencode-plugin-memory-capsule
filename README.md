@@ -58,6 +58,8 @@ graph TD
 | `redundancyThreshold` | `number` | `0.88` | 胶囊去重冗余阈值。相似度高于此值的结晶会被判定为 redundant 而不予重复存入。 |
 | `topK` | `number` | `5` | 单词对话中最大可匹配注入的胶囊数量。 |
 | `knowledgePatterns` | `array` | `['**/KNOWLEDGE-*.md', '**/CAPSULE-*.md', '**/ARCHITECTURE.md', '**/DECISIONS.md']` | 触发知识文件构建的 Glob 模式。 |
+| `useLocalEmbedding` | `boolean` | `true` | 是否优先使用本地向量模型。如果设为 `false`，则回退为 API 检索模式。 |
+| `localEmbeddingModel` | `string` | `'Xenova/bge-small-zh-v1.5'` | 本地向量模型名称。支持 Hugging Face 上兼容 sentence-transformers 的 ONNX 格式模型。 |
 | `useLocalDatabase` | `boolean` | `false` | 是否使用本地工作区存储 SQLite（即放在 `.opencode/capsule.db`）。默认 `false`，存储在 `~/.config/opencode` 下的集中式目录，按工作区 MD5 隔离，避免弄脏项目代码。 |
 | `enableAutoDistill` | `boolean` | `false` | 会话闲置（session.idle）时是否允许在后台自动调用大模型提炼胶囊。默认关闭以防过度消耗 Token 额度。 |
 

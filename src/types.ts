@@ -54,6 +54,8 @@ export const CapsulePluginConfigSchema = z.object({
   maxToolResultTokens: z.number().default(3000).describe('capsuleQuery 工具返回最大 token 数'),
   useLocalDatabase: z.boolean().default(false).describe('是否在项目本地存储数据库（.opencode/capsule.db）'),
   enableAutoDistill: z.boolean().default(false).describe('是否允许在空闲时自动合成胶囊'),
+  useLocalEmbedding: z.boolean().default(true).describe('是否优先使用本地向量模型'),
+  localEmbeddingModel: z.string().default('Xenova/bge-small-zh-v1.5').describe('本地向量模型名称'),
 });
 
 export type CapsulePluginConfig = z.infer<typeof CapsulePluginConfigSchema>;
