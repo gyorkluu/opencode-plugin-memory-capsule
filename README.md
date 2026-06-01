@@ -41,6 +41,11 @@ graph TD
 4. **高度可观测的持久化日志**：
    * 所有胶囊结晶过程、向量计算、同步与 GC 动作均会附加 ISO 时间戳输出到本地的 `~/.config/opencode/plugins/memory-capsule/logs/plugin.log` 中。
 
+> [!NOTE]
+> **关于本地向量（Embedding）模型**：
+> * 本插件采用轻量级中文向量模型 `BAAI/bge-small-zh-v1.5`，通过 `onnxruntime-web` 在本地 CPU 环境上利用 WebAssembly 线程运行，**所有检索与计算完全在本地进行，代码和隐私数据不会上传至任何第三方云端**。
+> * **下载机制**：为保持包体积轻量，模型权重文件（约 90MB）在安装时不会打包下载，而是在**插件首次被 OpenCode 启动加载并执行第一笔向量化检索或胶囊合成时，自动从 Hugging Face 镜像静默下载**，并缓存在本地的 `~/.cache/huggingface/hub/` 目录下。首次运行可能会因网络下载产生几秒延迟，之后运行将完全离线且零网络消耗。
+
 ---
 
 ## ⚙️ 插件配置参数
