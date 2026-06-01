@@ -58,60 +58,68 @@ graph TD
 
 ---
 
-## 🚀 安装方法
+## 🚀 安装与配置方法
 
-### 方式 1：使用配置文件声明安装（推荐所有用户）
+由于此插件已开源托管在 GitHub 公开仓库，可以通过在 OpenCode 配置文件中直接声明来完成快捷安装（无需配置任何 GitHub SSH Key 权限）：
 
-由于此插件的代码托管在 GitHub 公开仓库，任何人都可以直接在配置文件中引用安装，无需配置 SSH Key 权限：
+### 1. 全局安装配置示例
 
-1. **配置依赖包文件 (`package.json`)**：
-   如果你想在全局加载该插件，编辑 `~/.config/opencode/package.json`；如果只想在单个项目里加载，编辑当前项目工作区根目录的 `.opencode/package.json`：
-   ```json
-   {
-     "dependencies": {
-       "opencode-plugin-memory-capsule": "git+https://github.com/gyorkluu/opencode-plugin-memory-capsule.git"
-     }
-   }
-   ```
+在 OpenCode 全局配置目录 `~/.config/opencode/` 下设置以下两个文件：
 
-2. **在配置文件中声明启用 (`opencode.json`)**：
-   对应地，编辑全局的 `~/.config/opencode/opencode.json` 或项目级的 `.opencode/opencode.json`：
-   ```json
-   {
-     "plugin": [
-       "opencode-plugin-memory-capsule"
-     ]
-   }
-   ```
+* **全局依赖声明 [package.json](file:///Users/gyork/.config/opencode/package.json)**：
+  ```json
+  {
+    "dependencies": {
+      "opencode-plugin-memory-capsule": "git+https://github.com/gyorkluu/opencode-plugin-memory-capsule.git"
+    }
+  }
+  ```
 
-3. **重新安装**：
-   运行命令让依赖就绪，或者直接重启 OpenCode：
-   ```bash
-   # 全局安装时
-   cd ~/.config/opencode && bun install
+* **全局启用声明 [opencode.json](file:///Users/gyork/.config/opencode/opencode.json)**：
+  ```json
+  {
+    "$schema": "https://opencode.ai/config.json",
+    "plugin": [
+      "opencode-plugin-memory-capsule"
+    ]
+  }
+  ```
 
-   # 项目级安装时
-   cd .opencode && bun install
-   ```
+* **执行安装**：
+  在终端中运行以下命令，或直接重启 OpenCode 客户端：
+  ```bash
+  cd ~/.config/opencode && bun install
+  ```
 
 ---
 
-### 方式 2：本地克隆开发加载（开发者适用）
+### 2. 项目级安装配置示例 (仅在当前工程生效)
 
-1. 将本仓库克隆至你的全局插件或项目插件目录：
-   ```bash
-   git clone git@github.com:gyorkluu/opencode-plugin-memory-capsule.git ~/.config/opencode/plugins/memory-capsule
-   ```
-2. 安装依赖并完成编译：
-   ```bash
-   cd ~/.config/opencode/plugins/memory-capsule
-   bun install
-   bun x tsc
-   ```
-3. 在 `~/.config/opencode/plugins/` 下创建一个名为 `memory-capsule.js` 的文件，写入以下入口代码：
-   ```javascript
-   export { MemoryCapsulePlugin } from "./memory-capsule/dist/index.js";
-   ```
+如果你只想在特定项目工程下启用该记忆胶囊，可以在项目根目录下的 `.opencode/` 文件夹中配置：
+
+* **项目依赖声明 `.opencode/package.json`**：
+  ```json
+  {
+    "dependencies": {
+      "opencode-plugin-memory-capsule": "git+https://github.com/gyorkluu/opencode-plugin-memory-capsule.git"
+    }
+  }
+  ```
+
+* **项目启用声明 `.opencode/opencode.json`**：
+  ```json
+  {
+    "plugin": [
+      "opencode-plugin-memory-capsule"
+    ]
+  }
+  ```
+
+* **执行安装**：
+  在项目根目录下运行命令：
+  ```bash
+  cd .opencode && bun install
+  ```
 
 ---
 
