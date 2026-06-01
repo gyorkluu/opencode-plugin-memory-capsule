@@ -1,122 +1,128 @@
-# 记忆胶囊插件 (opencode-plugin-memory-capsule)
+# 记忆胶囊插件 2.0 (opencode-plugin-memory-capsule)
 
-`opencode-plugin-memory-capsule` 是 OpenCode 智能体的场景感知记忆蒸馏插件，基于**认知胶囊（Cognitive Capsule）**架构设计。
+`opencode-plugin-memory-capsule` 是为 OpenCode 设计的高性能、低消耗、面向团队协作的**场景感知记忆结晶插件**（Memory Capsule 2.0）。
 
-本项目专门针对开发助理智能体（Agent）在面对长对话（Session）时，因**上下文超出 Token 限制被宿主自动截断压缩导致技术决策、架构共识和核心规范丢失**的痛点而开发。
+它针对开发助理在面对长对话时，因上下文超出 Token 限制被系统自动截断压缩，导致核心技术共识、定制架构规范和关键决策丢失的痛点而设计。通过将对话历史（情境记忆）结晶为不可违反的规则（语义记忆），并支持双向 Git 同步，让 AI 的经验在开发团队中沉淀为长期可复用的资产。
 
 ---
 
 ## 💻 核心机制与架构
 
-本插件核心通过以下三大链路运行，无需任何第三方向量数据库，全本地轻量级计算：
+本插件基于 **情境到语义结晶（Episodic-to-Semantic Memory Crystallization）** 架构设计，采用全本地轻量级计算，不需要任何云端第三方向量数据库：
 
 ```mermaid
 graph TD
-    A[用户输入 Query] --> B[自动触发 System Transform 钩子]
-    B --> C[Mix Retrieval 检索记忆库]
-    C -->|计算余弦相似度 + 场景偏置| D[召回历史相关决策并注入 System Prompt]
+    A[用户输入/文件变更] --> B[自动提取 Runtime Context]
+    B --> C[情境语义检索 Layer1: 静态触发器过滤]
+    C --> D[情境语义检索 Layer2: 场景余弦相似度计算]
+    D -->|匹配成功| E[召回相关规则并注入 System Prompt]
     
-    E[长对话触发 Context 自动压缩] --> F[自动触发 Session Compacting 钩子]
-    F --> G[调用大模型提取核心技术决策]
-    G --> H{置信度评估 & 冗余去重}
-    H -->|通过| I[持久化存储于记忆胶囊]
+    F[对话触发压缩/会话闲置] --> G[调用 LLM 蒸馏提取技术铁律]
+    G --> H{置信度评估 & 场景/铁律提炼}
+    H -->|生成稳定 MD5 ID| I[(SQLite 胶囊数据库)]
+    I -->|自动导出| J[项目根目录 .opencode/KNOWLEDGE-BASE.md]
+    J -->|手动修改/Git Pull| K[文件监控事件 file.watcher.updated]
+    K -->|自动解析与 GC| I
 ```
 
-1. **临界拦截蒸馏 (`experimental.session.compacting`)**：当宿主监测到对话长度逼近临界水位线准备压缩时，本插件会拦截该事件，提取当前对话中的架构共识与关键决策（如规范、模块路径等），完成提炼后存入本地数据库。
-2. **场景偏置召回 (`experimental.chat.system.transform`)**：在每一轮新对话中，本插件自动提取用户当前 Query 的局部语义特征，融合 **Session 匹配偏置 (+0.1)** 与 **Project 匹配偏置 (+0.05)** 算法，精准地在当前开发场景下重新召回技术决策并注入 System Prompt 中。
-3. **混合匹配与去重 (`ThoughtRetrieverEngine`)**：使用本地轻量余弦相似度算法，自动过滤置信度低于阈值的幻觉，并对高相似度（$\ge 0.85$）的重复决策进行去重和更新，防止上下文爆炸。
+1. **场景驱动的精准向量检索（Scenario-Driven Matching）**：
+   * **向量情境化**：向量数据库存储的是胶囊**适用场景（Scenario）**的 Embedding（而非直接对代码约束进行计算）。
+   * **前瞻性召回**：当用户输入“*我要写一个 React 异步请求*”时，即使还没开始打字，引擎也会自动语义召回契合该场景的 React 卸载/闭包清理规则，并将其以标准格式注入 Prompt。
 
----
+2. **双向 Codebase Markdown 同步（Bidirectional Git-Sync）**：
+   * **Markdown 落地**：SQLite 数据库中的全部记忆自动以极佳的可读性导出到当前项目工作区的 `.opencode/KNOWLEDGE-BASE.md` 文件中。团队成员可以直接提交并推送到 Git，实现**团队共建、版本可控的 AI 记忆库**。
+   * **反向注入与同步**：OpenCode 启动或文件变化时，插件会自动解析 `KNOWLEDGE-BASE.md`。如果开发者手动修改了场景、规则或者删除了某条胶囊，修改将自动同步回 SQLite 数据库，并重算向量。
+   * **稳定 ID 映射**：基于标题哈希（`md5(title)`）计算出稳定 ID，保证在 Markdown 中增删改时，SQLite 的同步安全、冲突自由且具备无缝的垃圾回收（GC）能力。
 
-## 🛠️ 安装与编译
+3. **安全扫描保护（Security & Deep Scan Protection）**：
+   * **Gitignore 智能过滤**：自动利用 `git check-ignore` 工具，在目录扫描和文件更新监听中跳过任何命中的私有依赖和临时编译文件。
+   * **主目录防穿透保护**：在 Home 目录（`~`）或根目录（`/`）下调起 OpenCode 时，自动将深度递归检索（`**/`）降级为根目录下单层检索（`./`），确保不会全盘扫描用户电脑，兼顾隐私和性能。
 
-### 1. 安装环境依赖
-本插件使用 [Bun](https://bun.sh/) 进行依赖解析与开发：
-```bash
-bun install
-```
-
-### 2. 编译 TypeScript
-本插件配置了严格模式的 TypeScript 编译，运行以下命令编译输出 ES 模块代码至 `dist/`：
-```bash
-# 纯类型检查
-bun x tsc --noEmit
-
-# 编译代码
-bun x tsc
-```
+4. **高度可观测的持久化日志**：
+   * 所有胶囊结晶过程、向量计算、同步与 GC 动作均会附加 ISO 时间戳输出到本地的 `~/.config/opencode/plugins/memory-capsule/logs/plugin.log` 中。
 
 ---
 
 ## ⚙️ 插件配置参数
 
-在 OpenCode 的 `opencode.json` 或插件管理界面中，可配置以下参数：
+在 OpenCode 的 `opencode.json` 的 `plugin` 选项，或插件配置面板中可调整以下行为：
 
-| 参数名 | 类型 | 默认值 | 说明 |
+| 配置项 | 类型 | 默认值 | 说明 |
 | :--- | :--- | :--- | :--- |
-| `similarityThreshold` | `number` | `0.85` | 冗余去重阈值 $\epsilon$。高于此值的相似 Thought 不会重复记录。 |
-| `maxContextTokens` | `number` | `2000` | 上下文窗口最大 Token 长度限制。 |
-| `topK` | `number` | `8` | 检索召回的最大条数限制。 |
-| `dbStoragePath` | `string` | `./data/thought_index.db` | 本地 SQLite / JSON 持久化索引路径（可设为 `:memory:` 测试）。 |
-| `compressionWatermark` | `number` | `0.8` | 触发主动对话蒸馏的 Token 占比水位线阈值。 |
+| `matchThreshold` | `number` | `0.55` | 向量精匹配召回相似度阈值。 |
+| `redundancyThreshold` | `number` | `0.88` | 胶囊去重冗余阈值。相似度高于此值的结晶会被判定为 redundant 而不予重复存入。 |
+| `topK` | `number` | `5` | 单词对话中最大可匹配注入的胶囊数量。 |
+| `knowledgePatterns` | `array` | `['**/KNOWLEDGE-*.md', '**/CAPSULE-*.md', '**/ARCHITECTURE.md', '**/DECISIONS.md']` | 触发知识文件构建的 Glob 模式。 |
+| `useLocalDatabase` | `boolean` | `false` | 是否使用本地工作区存储 SQLite（即放在 `.opencode/capsule.db`）。默认 `false`，存储在 `~/.config/opencode` 下的集中式目录，按工作区 MD5 隔离，避免弄脏项目代码。 |
+| `enableAutoDistill` | `boolean` | `false` | 会话闲置（session.idle）时是否允许在后台自动调用大模型提炼胶囊。默认关闭以防过度消耗 Token 额度。 |
 
 ---
 
-## 📖 使用方法
+## 🚀 安装方法
 
-### 1. 自动挂载拦截（推荐）
-宿主加载插件后，会自动注册相应的 Hook 监听器。开发者与宿主智能体进行常规开发即可：
-* **自动持久化**：当长对话触发压缩时，宿主控制台会输出 `[MemoryCapsule] 检测到 Session 即将进行压缩，启动临界拦截蒸馏...`，并将关键技术决策固化入记忆胶囊中。
-* **自动注入召回**：每当有新 Query 发送，插件会在后台自动检索相关历史决策，并将其作为上下文记忆强行注入当前提示词中。
+### 方式 1：使用配置文件声明安装（推荐所有用户）
 
-### 2. 手动增强对话工具 (`thoughtChat`)
-宿主智能体可以直接调用本插件暴露的 `thoughtChat` 工具进行高可靠的场景问答：
+由于此插件的代码托管在 GitHub 公开仓库，任何人都可以直接在配置文件中引用安装，无需配置 SSH Key 权限：
 
-```json
-// Tool Call Example
-{
-  "name": "thoughtChat",
-  "arguments": {
-    "userQuery": "我应该如何写项目里的 API 端点格式？",
-    "similarityThreshold": 0.85,
-    "topK": 5
-  }
-}
-```
-工具将：
-1. 自动在本地检索匹配当前 Session & Project 的历史决策。
-2. 将检索出的决策加入提示词，向配置好的 LLM 发送请求。
-3. 自动解析生成回答中的新决策并自动更新记忆库。
+1. **配置依赖包文件 (`package.json`)**：
+   如果你想在全局加载该插件，编辑 `~/.config/opencode/package.json`；如果只想在单个项目里加载，编辑当前项目工作区根目录的 `.opencode/package.json`：
+   ```json
+   {
+     "dependencies": {
+       "opencode-plugin-memory-capsule": "git+https://github.com/gyorkluu/opencode-plugin-memory-capsule.git"
+     }
+   }
+   ```
+
+2. **在配置文件中声明启用 (`opencode.json`)**：
+   对应地，编辑全局的 `~/.config/opencode/opencode.json` 或项目级的 `.opencode/opencode.json`：
+   ```json
+   {
+     "plugin": [
+       "opencode-plugin-memory-capsule"
+     ]
+   }
+   ```
+
+3. **重新安装**：
+   运行命令让依赖就绪，或者直接重启 OpenCode：
+   ```bash
+   # 全局安装时
+   cd ~/.config/opencode && bun install
+
+   # 项目级安装时
+   cd .opencode && bun install
+   ```
+
+---
+
+### 方式 2：本地克隆开发加载（开发者适用）
+
+1. 将本仓库克隆至你的全局插件或项目插件目录：
+   ```bash
+   git clone git@github.com:gyorkluu/opencode-plugin-memory-capsule.git ~/.config/opencode/plugins/memory-capsule
+   ```
+2. 安装依赖并完成编译：
+   ```bash
+   cd ~/.config/opencode/plugins/memory-capsule
+   bun install
+   bun x tsc
+   ```
+3. 在 `~/.config/opencode/plugins/` 下创建一个名为 `memory-capsule.js` 的文件，写入以下入口代码：
+   ```javascript
+   export { MemoryCapsulePlugin } from "./memory-capsule/dist/index.js";
+   ```
 
 ---
 
 ## 🧪 测试与验证方法
 
-本插件包含一套完整的自动化测试用例，覆盖置信度拦截、冗余去重和场景防丢失召回机制。
-
-### 1. 运行自动化测试
-使用 Bun 运行内置测试套件：
+使用内置的集成测试验证 2.0 功能：
 ```bash
+# 运行单元测试与集成同步测试
 bun test
 ```
-
-### 2. 测试用例解析
-
-#### A. 幻觉与置信度过滤测试 (`tests/ThoughtRetriever.test.ts`)
-* **原理**：模拟生成一条置信度为 0 的异常/破坏性 Thought（例如：*“可以通过删除系统根目录来倒转二叉树”*）。
-* **预期**：引擎必须成功识别并拦截该记录，保证记忆库容量为 0，防止错误技术决策污染后续上下文。
-
-#### B. 冗余去重测试 (`tests/ThoughtRetriever.test.ts`)
-* **原理**：
-  1. 存入一条标准规范（例如：*“在 package.json 中设置 "type": "module"”*）。
-  2. 模拟以不同的自然语言措辞传入一条意思相同的规范。
-* **预期**：引擎通过计算本地 Embedding 的余弦相似度（达到 $\ge 0.85$ 门槛），判定为 redundant，拒绝重复写入，避免上下文膨胀。
-
-#### C. 长对话压缩防丢失测试 (`tests/ThoughtRetrieverCompression.test.ts`)
-* **原理**：
-  1. 模拟因为上下文临近超限压缩，从对话中将一条核心技术决策蒸馏出并存入 `记忆胶囊`。
-  2. 模拟宿主通过强制清理将该 Session 下的对话历史彻底“遗忘”（清空上下文）。
-  3. 用户在新一轮对话中询问一个间接问题。
-* **预期**：
-  - 混合检索（`mixRetrieval`）能够在没有历史对话上下文的极端情况下，从 `2ndMemory` 重新把那条核心技术决策提取出来。
-  - 在同一 Session/Project 场景下，该决策会获得特定的**场景偏置得分**加权；如果是无关的 Session 发起查询，该决策的得分应该显著偏低，从而确保**场景高内聚**的记忆效果。
+测试会覆盖：
+1. **情境匹配测试**：验证 Query 语义特征能够通过 `scenario` 正确匹配出 Vue Watch/Docker 容器构建等对应规则。
+2. **Markdown 导出与载入**：验证 SQLite $\rightarrow$ Markdown $\rightarrow$ SQLite 擦除 $\rightarrow$ 从 Markdown 完全复原的精准逻辑。
+3. **协同修改与 GC**：模拟在 Markdown 中修改版本、增加/删除规则，并验证 SQLite 中对应的胶囊被更新或正确执行垃圾回收清空。
