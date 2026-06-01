@@ -1,0 +1,27 @@
+{
+  "name": "opencode-plugin-memory-capsule",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "module": "dist/index.js",
+  "type": "module",
+  "private": true,
+  "devDependencies": {
+    "@types/bun": "latest"
+  },
+  "peerDependencies": {
+    "typescript": "^5"
+  },
+  "dependencies": {
+    "@opencode-ai/plugin": "^1.15.7",
+    "@opencode-ai/sdk": "^1.15.7",
+    "glob": "^13.0.6",
+    "minimatch": "^10.2.5",
+    "onnxruntime-web": "^1.26.0",
+    "zod": "4.1.8"
+  },
+  "pnpm": {
+    "overrides": {
+      "onnxruntime-node": "npm:empty-npm-package@1.0.0"
+    }
+  }
+}
