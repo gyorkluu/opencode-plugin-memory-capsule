@@ -14,12 +14,27 @@ import { z } from 'zod';
 
 const MAX_INJECTION_TOKENS = 4000;
 
+// @opencode-ai/plugin@1.15.13's PluginInput is { client, project, directory,
+// worktree, ... }. The `directory` field is the current working directory
+// (replacing the old ctx.project.path).
+// `options` (the second arg) is a PluginOptions = Record<string, unknown>;
+// it carries the [name, options] tuple from opencode.json's `plugin` array.
+// Note: in opencode 1.15.13 there is a known bug where `options` is passed
+// as undefined despite the [name, options] tuple in opencode.json. The
+// fallback chain below means the plugin still works correctly in that case.
 export const MemoryCapsulePlugin: Plugin = async (ctx, options) => {
   const config = CapsulePluginConfigSchema.parse(options || {});
-  const projectDir = (ctx.project as any)?.path || process.cwd();
-  // Engine uses knowledgeProjectDir so capsules are loaded from a fixed
-  // knowledge base, decoupled from CWD.
-  const knowledgeProjectDir = (config as any).knowledgeProjectPath || projectDir;
+  const projectDir = (ctx.directory || process.cwd()).replace(/\/+$/, '');
+  // Knowledge base resolution (in priority order):
+  // 1) explicit config option (when opencode fixes the options-passing bug)
+  // 2) if CWD is NOT the home dir, use CWD as knowledge base
+  // 3) if CWD IS the home dir, fall back to the opencode config dir so the
+  //    plugin can still find a KNOWLEDGE-BASE.md (which the user can symlink)
+  const pluginFileDir = path.dirname(new URL(import.meta.url).pathname);
+  const configDir = path.resolve(pluginFileDir, '..', '..', '..'); // ~/.config/opencode
+  const knowledgeProjectDir =
+    (config as any).knowledgeProjectPath ||
+    (projectDir !== os.homedir() && projectDir !== '/' ? projectDir : configDir);
   const engine = new CapsuleEngine(config, knowledgeProjectDir);
 
   let lastIdleSynthTime = 0;
