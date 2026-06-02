@@ -165,6 +165,7 @@ Purpose: if a tool or type checker resolves the package root before `dist/` is b
 | --- | --- |
 | Plugin does not load after `bun install` | Verify `dist/index.js` exists. If not, run `bun run build`. |
 | `prepare` hook silently skipped | Requires bun ≥ 1.2.5. Upgrade with `bun upgrade`. |
+| `[LocalEmbedding] Failed to initialize: Cannot find module './ort-wasm-simd-threaded.mjs'` | The `onnxruntime-web` WASM files were bundled away. **Make sure the build script includes `--external onnxruntime-web`** (already in `package.json`). Do NOT inline the package. |
 | Build fails: `Cannot find module '@opencode-ai/plugin'` | SDK drift — bump: `bun update @opencode-ai/plugin @opencode-ai/sdk`. |
 | First query is very slow | First run downloads the ~90MB `BAAI/bge-small-zh-v1.5` ONNX model from a HuggingFace mirror, cached at `~/.cache/huggingface/hub/`. |
 

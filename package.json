@@ -6,8 +6,8 @@
   "type": "module",
   "private": true,
   "scripts": {
-    "build": "bun build src/index.ts --outdir dist --target node --format esm",
-    "build:watch": "bun build src/index.ts --outdir dist --target node --format esm --watch",
+    "build": "bun build src/index.ts --outdir dist --target node --format esm --external onnxruntime-web",
+    "build:watch": "bun build src/index.ts --outdir dist --target node --format esm --external onnxruntime-web --watch",
     "clean": "rm -rf dist",
     "prepare": "bun run build",
     "prepublishOnly": "bun run clean && bun run build"

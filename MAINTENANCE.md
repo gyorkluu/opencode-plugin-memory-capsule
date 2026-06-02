@@ -33,8 +33,8 @@ opencode-plugin-memory-capsule/
 
 ```json
 "scripts": {
-  "build": "bun build src/index.ts --outdir dist --target node --format esm",
-  "build:watch": "bun build src/index.ts --outdir dist --target node --format esm --watch",
+  "build": "bun build src/index.ts --outdir dist --target node --format esm --external onnxruntime-web",
+  "build:watch": "bun build src/index.ts --outdir dist --target node --format esm --external onnxruntime-web --watch",
   "clean": "rm -rf dist",
   "prepare": "bun run build",
   "prepublishOnly": "bun run clean && bun run build"
@@ -44,13 +44,37 @@ opencode-plugin-memory-capsule/
 `bun install` → `prepare` → `bun run build` 链路：
 
 1. `bun install` 解析 `dependencies` 装包
-2. 装完后 npm / bun 生命周期触发 `prepare` 脚本
+2. 装完后 bun 生命周期触发 `prepare` 脚本
 3. `prepare` 调用 `bun run build`
-4. `bun build src/index.ts --outdir dist --target node --format esm` 输出
-   `dist/index.js` + sourcemaps + `.d.ts`
+4. `bun build src/index.ts --outdir dist --target node --format esm --external onnxruntime-web` 输出
+   `dist/index.js`（体积 ~0.64 MB，剩余 90MB 的 WASM 二进制保持从 `node_modules/onnxruntime-web/dist/` 动态加载）
 
 **如果 `prepare` 失败**，症状是 `package.json.main` 指向不存在的 `dist/index.js`。
 排查：`bun --version`（需 ≥ 1.2.5）；手动 `bun run build` 看堆栈。
+
+### 为什么 `onnxruntime-web` 必须 `--external`
+
+Bun bundler 默认会把 `onnxruntime-web` 的 JS 代码打包进 `dist/index.js`，但
+**它配套的 `.wasm` 二进制和 `.mjs` 辅助模块不会**。运行时动态加载会爆：
+
+```
+[LocalEmbedding] Failed to initialize: Cannot find module './ort-wasm-simd-threaded.mjs'
+```
+
+正确做法是 `--external onnxruntime-web`：
+
+* 打包后的 `dist/index.js` 改成 `import` 而非内联
+* 运行时从 `node_modules/onnxruntime-web/dist/` 动态加载 WASM 文件
+* 90 MB 体积也省下来了
+
+**绝对不要**删 `--external onnxruntime-web` 改回默认 inline —— 会再次踩坑。
+
+如果 CI 环境无法联网（HuggingFace 拉不到模型），预热步骤：
+
+```bash
+# 提前下载 bge-small-zh-v1.5 到全局缓存
+python3 -c "from huggingface_hub import snapshot_download; snapshot_download('Xenova/bge-small-zh-v1.5', cache_dir='~/.cache/huggingface/hub/')"
+```
 
 ## 3. OpenCode SDK 升级注意事项
 

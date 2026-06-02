@@ -165,6 +165,7 @@ export { MemoryCapsulePlugin } from './src/index.js'
 | --- | --- |
 | OpenCode 启动后插件未加载 | 检查 `dist/index.js` 是否存在。若不存在，运行 `bun run build`。 |
 | 反复 `bun install` 仍报"找不到 dist" | 升级 `bun` 到 1.3+（`prepare` 钩子需要 bun 1.2.5+）。 |
+| `[LocalEmbedding] Failed to initialize: Cannot find module './ort-wasm-simd-threaded.mjs'` | `onnxruntime-web` 的 WASM 文件被错误地打包了。**确认 `package.json` 的 `build` 命令带 `--external onnxruntime-web`**。绝对不要把这个 flag 去掉。 |
 | 编译报错 `Cannot find module '@opencode-ai/plugin'` | 升级 SDK：`bun update @opencode-ai/plugin @opencode-ai/sdk`。 |
 | 向量模型首次运行缓慢 | 首次会从 HuggingFace 镜像下载约 90MB `BAAI/bge-small-zh-v1.5` 模型，缓存在 `~/.cache/huggingface/hub/`。 |
 
