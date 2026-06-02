@@ -24,6 +24,8 @@ export class CapsuleEngine {
   private dbPath: string;
   private embeddingCache: Map<string, number[]> = new Map();
   private closed = false;
+  /** Stash for the current sync's source label (used to tag each capsule row) */
+  private _currentSourceLabel = '';
 
   constructor(config: CapsulePluginConfig, projectDir?: string) {
     this.config = config;
@@ -109,6 +111,7 @@ export class CapsuleEngine {
         invariant_constraint TEXT NOT NULL DEFAULT '',
         parent_capsule_ids TEXT NOT NULL DEFAULT '[]',
         root_source_chunk_ids TEXT NOT NULL DEFAULT '[]',
+        source_project TEXT NOT NULL DEFAULT '',
         created_at INTEGER NOT NULL,
         embedding BLOB
       );
@@ -138,6 +141,11 @@ export class CapsuleEngine {
 
     try {
       this.db.exec("ALTER TABLE capsules ADD COLUMN scenario TEXT NOT NULL DEFAULT ''");
+    } catch (e) {
+      // column already exists, safe to ignore
+    }
+    try {
+      this.db.exec("ALTER TABLE capsules ADD COLUMN source_project TEXT NOT NULL DEFAULT ''");
     } catch (e) {
       // column already exists, safe to ignore
     }
@@ -353,8 +361,8 @@ export class CapsuleEngine {
       INSERT OR REPLACE INTO capsules
         (id, title, version, scenario, static_triggers, semantic_description,
          defect_pattern, invariant_constraint, parent_capsule_ids,
-         root_source_chunk_ids, created_at, embedding)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+         root_source_chunk_ids, source_project, created_at, embedding)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       newCapsule.id,
       newCapsule.title,
@@ -366,6 +374,7 @@ export class CapsuleEngine {
       newCapsule.payload.invariantConstraint,
       JSON.stringify(newCapsule.genealogy.parentCapsuleIds),
       JSON.stringify(newCapsule.genealogy.rootSourceChunkIds),
+      newCapsule.sourceProject || '',
       newCapsule.createdAt,
       this.vecToBuffer(newVec)
     );
@@ -464,14 +473,24 @@ export class CapsuleEngine {
   public async syncFromCodebaseMarkdown(
     projectDir: string,
     embedFn: EmbeddingFn,
-    log?: LogFn
+    log?: LogFn,
+    sourceLabel?: string
   ): Promise<void> {
     if (this.closed) return;
-    const mdPath = path.join(projectDir, '.opencode', 'KNOWLEDGE-BASE.md');
+    // Allow absolute path to a markdown file directly (bundled usage)
+    let mdPath: string;
+    if (projectDir.endsWith('.md') && fs.existsSync(projectDir)) {
+      mdPath = projectDir;
+    } else {
+      mdPath = path.join(projectDir, '.opencode', 'KNOWLEDGE-BASE.md');
+    }
     if (!fs.existsSync(mdPath)) {
       log?.(`[syncFromCodebaseMarkdown] Markdown file not found at ${mdPath}, skipping sync.`, 'info');
       return;
     }
+
+    // Stash the source label so the per-capsule row knows its origin
+    this._currentSourceLabel = sourceLabel || path.relative(process.cwd(), mdPath) || mdPath;
 
     try {
       const content = fs.readFileSync(mdPath, 'utf-8');
@@ -562,6 +581,7 @@ export class CapsuleEngine {
               parentCapsuleIds: [],
               rootSourceChunkIds: []
             },
+            sourceProject: this._currentSourceLabel,
             createdAt: Date.now()
           });
         }
@@ -588,8 +608,8 @@ export class CapsuleEngine {
           INSERT OR REPLACE INTO capsules
             (id, title, version, scenario, static_triggers, semantic_description,
              defect_pattern, invariant_constraint, parent_capsule_ids,
-             root_source_chunk_ids, created_at, embedding)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+             root_source_chunk_ids, source_project, created_at, embedding)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `).run(
           cap.id,
           cap.title,
@@ -601,6 +621,7 @@ export class CapsuleEngine {
           cap.payload.invariantConstraint,
           JSON.stringify(cap.genealogy.parentCapsuleIds),
           JSON.stringify(cap.genealogy.rootSourceChunkIds),
+          cap.sourceProject || '',
           cap.createdAt,
           embeddingBuf
         );
@@ -651,6 +672,7 @@ export class CapsuleEngine {
         parentCapsuleIds: JSON.parse(row.parent_capsule_ids || '[]'),
         rootSourceChunkIds: JSON.parse(row.root_source_chunk_ids || '[]'),
       },
+      sourceProject: row.source_project || '',
       createdAt: row.created_at,
     };
   }

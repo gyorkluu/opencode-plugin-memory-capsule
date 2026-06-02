@@ -24,6 +24,11 @@ export interface CognitiveCapsule {
     rootSourceChunkIds: string[];
   };
 
+  /** Which .opencode/KNOWLEDGE-BASE.md (or bundled file) this capsule came from.
+   *  Format: project-relative path (e.g. "bundled/super-cloud-disk.md")
+   *  or absolute path. Used for traceability. */
+  sourceProject: string;
+
   createdAt: number;
 }
 
@@ -37,6 +42,8 @@ export interface RuntimeContext {
 export const CapsulePluginConfigSchema = z.object({
   matchThreshold: z.number().default(0.4).describe('向量精匹配激活阈值'),
   knowledgeProjectPath: z.string().default('').describe('知识库项目目录（留空则跟随 CWD，可填绝对路径指向固定项目）'),
+  globalKnowledgeRoot: z.string().default('').describe('全局知识根目录：从此处递归扫所有 .opencode/KNOWLEDGE-BASE.md，把多项目胶囊合到一个 DB'),
+  enableProjectScan: z.boolean().default(false).describe('是否启用项目级知识扫描（默认关闭，知识全部走 bundled/）'),
   redundancyThreshold: z.number().default(0.88).describe('胶囊去重冗余阈值'),
   topK: z.number().default(5).describe('最大返回胶囊数'),
   knowledgePatterns: z.array(z.string()).default([

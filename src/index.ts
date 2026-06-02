@@ -243,6 +243,38 @@ export const MemoryCapsulePlugin: Plugin = async (ctx, options) => {
   // (knowledgeProjectDir is declared above near the top of the function so
   // file.watcher handlers can reuse it)
 
+  /**
+   * Load bundled knowledge that ships with the plugin itself. These .md files
+   * live in <plugin>/bundled/ next to dist/. They are version-controlled
+   * with the plugin code, so knowledge updates ride along with plugin
+   * releases. Loaded into the SAME DB as project knowledge, with each
+   * capsule's source_project pointing at the bundled file (e.g.
+   * "bundled/super-cloud-disk.md") for traceability.
+   */
+  const loadBundledKnowledge = async (): Promise<void> => {
+    const bundledDir = path.join(pluginFileDir, '..', 'bundled');
+    if (!fs.existsSync(bundledDir)) {
+      log(`[bundled] No bundled/ dir at ${bundledDir}, skipping`, 'info');
+      return;
+    }
+    const files = fs.readdirSync(bundledDir).filter(f => f.endsWith('.md'));
+    if (files.length === 0) {
+      log(`[bundled] bundled/ dir is empty`, 'info');
+      return;
+    }
+    log(`[bundled] Loading ${files.length} bundled knowledge file(s) from ${bundledDir}`, 'info');
+    for (const file of files) {
+      const absPath = path.join(bundledDir, file);
+      const relPath = `bundled/${file}`;
+      log(`[bundled] Syncing ${relPath} (source_project=${relPath})`, 'info');
+      try {
+        await engine.syncFromCodebaseMarkdown(absPath, getEmbedding, log, relPath);
+      } catch (e) {
+        log(`[bundled] Failed to sync ${relPath}: ${e}`, 'warn');
+      }
+    }
+  };
+
   const loadProjectKnowledge = async (): Promise<void> => {
     log(`[loadProjectKnowledge] Scanning project: ${knowledgeProjectDir} (cwd: ${projectDir})`, 'info');
 
@@ -512,8 +544,17 @@ ${selectedParts.join('\n\n---\n\n')}
     log(`[init] Local embedding model is disabled. Using API embedding fallback.`, 'info');
   }
 
-  engine.syncFromCodebaseMarkdown(knowledgeProjectDir, getEmbedding, log)
-    .then(() => loadProjectKnowledge())
+  // Load bundled knowledge first (always). Then optionally scan project dir
+  // (opt-in via enableProjectScan). The chained loadProjectKnowledge is only
+  // called inside the project-scan branch.
+  loadBundledKnowledge()
+    .then(() =>
+      (config as any).enableProjectScan
+        ? engine
+            .syncFromCodebaseMarkdown(knowledgeProjectDir, getEmbedding, log)
+            .then(() => loadProjectKnowledge())
+        : Promise.resolve()
+    )
     .then(() => {
       log(`[init] Engine ready: ${engine.getSourceCount()} sources, ${engine.getChunkCount()} chunks, ${engine.getCapsuleCount()} capsules`, 'info');
     })
