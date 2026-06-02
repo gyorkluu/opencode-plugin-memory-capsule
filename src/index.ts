@@ -17,7 +17,10 @@ const MAX_INJECTION_TOKENS = 4000;
 export const MemoryCapsulePlugin: Plugin = async (ctx, options) => {
   const config = CapsulePluginConfigSchema.parse(options || {});
   const projectDir = (ctx.project as any)?.path || process.cwd();
-  const engine = new CapsuleEngine(config, projectDir);
+  // Engine uses knowledgeProjectDir so capsules are loaded from a fixed
+  // knowledge base, decoupled from CWD.
+  const knowledgeProjectDir = (config as any).knowledgeProjectPath || projectDir;
+  const engine = new CapsuleEngine(config, knowledgeProjectDir);
 
   let lastIdleSynthTime = 0;
   let lastInjectedChunkIds: Set<string> = new Set();
@@ -219,10 +222,16 @@ export const MemoryCapsulePlugin: Plugin = async (ctx, options) => {
     return deterministicLocalEmbedding(text);
   };
 
-  const loadProjectKnowledge = async (): Promise<void> => {
-    log(`[loadProjectKnowledge] Scanning project: ${projectDir}`, 'info');
+  // Knowledge lives in a project dir separate from the CWD. By default it's the
+  // current project, but you can point to a different one (e.g. always load
+  // super-cloud-disk knowledge even when CWD is ~ or a subdir of it).
+  // (knowledgeProjectDir is declared above near the top of the function so
+  // file.watcher handlers can reuse it)
 
-    const isHome = projectDir === os.homedir() || projectDir === '/';
+  const loadProjectKnowledge = async (): Promise<void> => {
+    log(`[loadProjectKnowledge] Scanning project: ${knowledgeProjectDir} (cwd: ${projectDir})`, 'info');
+
+    const isHome = knowledgeProjectDir === os.homedir() || knowledgeProjectDir === '/';
     let newChunks = 0;
     let skippedSources = 0;
 
@@ -488,7 +497,7 @@ ${selectedParts.join('\n\n---\n\n')}
     log(`[init] Local embedding model is disabled. Using API embedding fallback.`, 'info');
   }
 
-  engine.syncFromCodebaseMarkdown(projectDir, getEmbedding, log)
+  engine.syncFromCodebaseMarkdown(knowledgeProjectDir, getEmbedding, log)
     .then(() => loadProjectKnowledge())
     .then(() => {
       log(`[init] Engine ready: ${engine.getSourceCount()} sources, ${engine.getChunkCount()} chunks, ${engine.getCapsuleCount()} capsules`, 'info');
@@ -746,7 +755,7 @@ ${dialogueText.substring(0, 6000)}
 
       if (filePath.endsWith('KNOWLEDGE-BASE.md')) {
         log(`[file.watcher] KNOWLEDGE-BASE.md updated. Syncing to database...`, 'info');
-        await engine.syncFromCodebaseMarkdown(projectDir, getEmbedding, log);
+        await engine.syncFromCodebaseMarkdown(knowledgeProjectDir, getEmbedding, log);
         return;
       }
 

@@ -36,6 +36,7 @@ export interface RuntimeContext {
 
 export const CapsulePluginConfigSchema = z.object({
   matchThreshold: z.number().default(0.4).describe('向量精匹配激活阈值'),
+  knowledgeProjectPath: z.string().default('').describe('知识库项目目录（留空则跟随 CWD，可填绝对路径指向固定项目）'),
   redundancyThreshold: z.number().default(0.88).describe('胶囊去重冗余阈值'),
   topK: z.number().default(5).describe('最大返回胶囊数'),
   knowledgePatterns: z.array(z.string()).default([
