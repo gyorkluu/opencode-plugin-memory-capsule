@@ -141,3 +141,25 @@ git push origin main
 ```
 
 不要直接 `pnpm publish`——本仓库 `private: true` 不会上 npm。
+
+## 8. node_modules 符号链接（**开发必备**）
+
+默认 `bun install` 走完一遍后，`~/.config/opencode/node_modules/opencode-plugin-memory-capsule/`
+是一个**独立副本**，与 source 仓库脱钩。改完 source 跑 `bun run build`，产物落在 source 的
+`dist/`，但 node_modules 那份还在用**旧** dist——你看到 OpenCode 行为没变，会以为 build 没生效。
+
+**正解：把 node_modules 里的包符号链接到 source 仓库**：
+
+```bash
+cd ~/.config/opencode
+rm -rf node_modules/opencode-plugin-memory-capsule
+ln -s /Users/gyork/Documents/workspace/opencode-plugin-memory-capsule \
+      node_modules/opencode-plugin-memory-capsule
+```
+
+之后再 `bun run build`，dist 立即被 OpenCode 看到，**重启客户端即可**生效。
+
+同理可把 `plugins/memory-capsule.js` 软链到 `dist/index.js`，覆盖某些按文件名解析的入口。
+
+**判断符号链接生效的方法：** OpenCode 启动后看 `plugin.log` 的 `[init] Initializing CapsuleEngine with project: ...` 时间戳。
+如果是**最近**的（你重启后立刻出现），说明链接生效；如果是几个小时前，说明还在用旧副本。
