@@ -50,12 +50,12 @@ export const MemoryCapsulePlugin: Plugin = async (ctx, options) => {
 
   const isGitIgnored = (filePath: string): boolean => {
     try {
-      const relativePath = path.relative(projectDir, filePath);
+      const relativePath = path.relative(knowledgeProjectDir, filePath);
       if (relativePath.startsWith('..') || !relativePath) {
         return false;
       }
       const res = spawnSync('git', ['check-ignore', '-q', relativePath], {
-        cwd: projectDir,
+        cwd: knowledgeProjectDir,
       });
       return res.status === 0;
     } catch (e) {
@@ -239,7 +239,7 @@ export const MemoryCapsulePlugin: Plugin = async (ctx, options) => {
       try {
         const searchPattern = isHome ? pattern.replace(/^\*\*\//, './') : pattern;
         const files = await glob(searchPattern, {
-          cwd: projectDir,
+          cwd: knowledgeProjectDir,
           absolute: true,
           nodir: true
         });
@@ -249,7 +249,7 @@ export const MemoryCapsulePlugin: Plugin = async (ctx, options) => {
             const content = fs.readFileSync(filePath, 'utf-8');
             if (content.trim().length === 0) continue;
 
-            const relativePath = path.relative(projectDir, filePath);
+            const relativePath = path.relative(knowledgeProjectDir, filePath);
             if (isGitIgnored(filePath)) {
               log(`[loadProjectKnowledge] Skipping git-ignored file: ${relativePath}`, 'debug');
               continue;
@@ -404,7 +404,7 @@ export const MemoryCapsulePlugin: Plugin = async (ctx, options) => {
       const registered = await engine.verifyAndRegister(capsule, getEmbedding, log);
       if (registered) {
         log(`[synthesizeCapsule] New capsule synthesized: "${capsule.title}"`, 'info');
-        engine.syncToCodebaseMarkdown(projectDir);
+        engine.syncToCodebaseMarkdown(knowledgeProjectDir);
       }
     } catch (e) {
       log(`[synthesizeCapsule] Failed: ${e}`, 'warn');
@@ -479,13 +479,13 @@ ${selectedParts.join('\n\n---\n\n')}
   };
 
   const matchesKnowledgePattern = (filePath: string): boolean => {
-    const relativePath = path.relative(projectDir, filePath);
+    const relativePath = path.relative(knowledgeProjectDir, filePath);
     return config.knowledgePatterns.some(pattern =>
       minimatch(relativePath, pattern, { matchBase: true })
     );
   };
 
-  log(`[init] Initializing CapsuleEngine with project: ${projectDir}`, 'info');
+  log(`[init] Initializing CapsuleEngine with project: ${projectDir} (knowledge: ${knowledgeProjectDir})`, 'info');
 
   if (config.useLocalEmbedding) {
     LocalEmbedding.ensureInitialized(config.localEmbeddingModel).then(() => {
@@ -690,7 +690,7 @@ ${dialogueText.substring(0, 6000)}
         }
 
         if (distilledCount > 0) {
-          engine.syncToCodebaseMarkdown(projectDir);
+          engine.syncToCodebaseMarkdown(knowledgeProjectDir);
           output.context.push(`[Cognitive Capsule] 已蒸馏并持久化 ${distilledCount} 条确定性技术约束。`);
           log(`[session.compacting] Distilled ${distilledCount} capsules`, 'info');
         }
@@ -766,7 +766,7 @@ ${dialogueText.substring(0, 6000)}
         return;
       }
 
-      const relativePath = path.relative(projectDir, filePath);
+      const relativePath = path.relative(knowledgeProjectDir, filePath);
       log(`[file.watcher] Knowledge file changed: ${relativePath}`, 'info');
 
       try {

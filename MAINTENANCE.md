@@ -163,3 +163,26 @@ ln -s /Users/gyork/Documents/workspace/opencode-plugin-memory-capsule \
 
 **判断符号链接生效的方法：** OpenCode 启动后看 `plugin.log` 的 `[init] Initializing CapsuleEngine with project: ...` 时间戳。
 如果是**最近**的（你重启后立刻出现），说明链接生效；如果是几个小时前，说明还在用旧副本。
+
+## 9. 路径来源原则（避免和 CWD 混用）
+
+插件维护中出现的所有 "路径" 必须明确归类，混用会导致胶囊在错误的时机/位置被加载：
+
+| 变量 | 含义 | 何时使用 |
+| --- | --- | --- |
+| `projectDir` | OpenCode 启动时的 CWD（`ctx.project.path` 或 `process.cwd()`） | **runtime context** —— `activeDeps` 来自 `projectDir/package.json`；`fileContent`/`fileExtension` 来自 CWD 当前打开的文件 |
+| `knowledgeProjectDir` | 知识库项目（`config.knowledgeProjectPath` 或 fallback 到 `projectDir`） | **KB 来源** —— SQLite DB 路径（`md5(knowledgeProjectDir)`）；`syncFromCodebaseMarkdown` 读/写路径；`loadProjectKnowledge` 的 glob cwd；`file.watcher` 的 relative path；`syncToCodebaseMarkdown` 写回路径 |
+
+判断标准：你在**读/写文件**？用 `knowledgeProjectDir`。
+你在**判断"用户当前在干嘛"**？用 `projectDir`。
+
+`isGitIgnored` 之前用 `projectDir` 是错的——如果 CWD 是父目录而知识库是子目录，git check-ignore 不会知道子目录的 gitignore。要用 `knowledgeProjectDir`。
+`buildRuntimeContext` 之前用 `projectDir` 是对的——activeDeps 要反映 CWD。
+
+参考 `index.ts` 中 `projectDir` vs `knowledgeProjectDir` 的出现位置：
+- `projectDir` 出现 2 处：第 19 行声明、第 296 行读 `package.json` 拿 activeDeps
+- `knowledgeProjectDir` 出现 17 处：DB 路径、KB 扫描、文件同步、git ignore、relative path
+
+如果发现新增的 `projectDir` 引用，先问自己："这是在做什么？"  
+读/写文件 → 改成 `knowledgeProjectDir`。  
+读用户当前项目的 package.json → 保持 `projectDir`。
