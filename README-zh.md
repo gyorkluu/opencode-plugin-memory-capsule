@@ -98,6 +98,8 @@ graph TD
   cd ~/.config/opencode && bun install
   ```
 
+  > ⚠️ **重要**：`package.json` 中已配置 `prepare` 钩子，`bun install` 会自动触发 `bun run build` 把 `src/index.ts` 编译到 `dist/index.js`。如果自动构建失败，请手动执行 `bun run build`。
+
 ---
 
 ### 2. 项目级安装配置示例 (仅在当前工程生效)
@@ -127,6 +129,44 @@ graph TD
   ```bash
   cd .opencode && bun install
   ```
+
+---
+
+## 🛠 构建管线
+
+本插件是 **TypeScript 源 + 编译产物双轨制**：
+
+* `src/` 是真正的 TypeScript 实现（OpenCode SDK 1.15+ 兼容）。
+* `dist/` 是 `bun build` 编译后的 ESM 产物，是 `package.json` 中 `main` 字段指向的入口。
+* `dist/` 在 `.gitignore` 中被忽略，**不会**随仓库一起分发，依赖 `bun install` 时由 `prepare` 钩子自动构建。
+
+| 命令 | 作用 |
+| --- | --- |
+| `bun install` | 安装依赖并通过 `prepare` 钩子自动构建 `dist/` |
+| `bun run build` | 手动触发一次构建（`src/index.ts` → `dist/index.js`） |
+| `bun run build:watch` | 监听 `src/` 增量重建（开发用） |
+| `bun run clean` | 删除 `dist/` |
+| `bun run prepublishOnly` | 发布前清理后重新构建 |
+| `bun test` | 跑单元 / 集成测试 |
+
+### 根 `index.ts` 的作用
+
+仓库根有一个 `index.ts` **不是**真正的插件入口。它是一个 **re-export shim**：
+
+```typescript
+export { MemoryCapsulePlugin } from './src/index.js'
+```
+
+目的：当 OpenCode 解析插件入口但构建未跑（dist 缺失）时，运行时如果意外读到了根 `index.ts`，也能从 `src/` 拿到真实符号，避免硬错误。`package.json` 的 `main` 字段实际指向 `dist/index.js`。
+
+### 故障排查
+
+| 现象 | 原因 / 修复 |
+| --- | --- |
+| OpenCode 启动后插件未加载 | 检查 `dist/index.js` 是否存在。若不存在，运行 `bun run build`。 |
+| 反复 `bun install` 仍报"找不到 dist" | 升级 `bun` 到 1.3+（`prepare` 钩子需要 bun 1.2.5+）。 |
+| 编译报错 `Cannot find module '@opencode-ai/plugin'` | 升级 SDK：`bun update @opencode-ai/plugin @opencode-ai/sdk`。 |
+| 向量模型首次运行缓慢 | 首次会从 HuggingFace 镜像下载约 90MB `BAAI/bge-small-zh-v1.5` 模型，缓存在 `~/.cache/huggingface/hub/`。 |
 
 ---
 

@@ -5,6 +5,13 @@
   "module": "dist/index.js",
   "type": "module",
   "private": true,
+  "scripts": {
+    "build": "bun build src/index.ts --outdir dist --target node --format esm",
+    "build:watch": "bun build src/index.ts --outdir dist --target node --format esm --watch",
+    "clean": "rm -rf dist",
+    "prepare": "bun run build",
+    "prepublishOnly": "bun run clean && bun run build"
+  },
   "devDependencies": {
     "@types/bun": "latest"
   },

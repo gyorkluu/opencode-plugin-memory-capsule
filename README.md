@@ -98,6 +98,8 @@ In your global configuration directory `~/.config/opencode/`, configure the foll
   cd ~/.config/opencode && bun install
   ```
 
+  > ⚠️ **Important**: `package.json` defines a `prepare` lifecycle hook. `bun install` will automatically run `bun run build` to compile `src/index.ts` → `dist/index.js`. If the auto-build fails for any reason, you can run `bun run build` manually.
+
 ---
 
 ### 2. Project-level Installation (Applies only to current workspace)
@@ -127,6 +129,44 @@ To enable the memory capsule plugin only for a specific project, place these con
   ```bash
   cd .opencode && bun install
   ```
+
+---
+
+## 🛠 Build Pipeline
+
+The plugin ships as **TypeScript source + compiled output**:
+
+* `src/` is the actual TypeScript implementation (OpenCode SDK 1.15+ compatible).
+* `dist/` is the `bun build` ESM output and the `main` entry of `package.json`.
+* `dist/` is in `.gitignore` and is **not** checked in. It is regenerated automatically by the `prepare` lifecycle script during `bun install`.
+
+| Command | Purpose |
+| --- | --- |
+| `bun install` | Install deps and run `prepare` → builds `dist/` automatically |
+| `bun run build` | One-shot build of `src/index.ts` → `dist/index.js` |
+| `bun run build:watch` | Watch `src/` and rebuild on change (dev only) |
+| `bun run clean` | Remove `dist/` |
+| `bun run prepublishOnly` | Clean + rebuild before publishing |
+| `bun test` | Run unit / integration tests |
+
+### Why a `index.ts` at the repo root
+
+The repository root has an `index.ts` that is **not** the real plugin entry. It is a **re-export shim**:
+
+```typescript
+export { MemoryCapsulePlugin } from './src/index.js'
+```
+
+Purpose: if a tool or type checker resolves the package root before `dist/` is built, the shim still surfaces the real symbol from `src/` instead of failing. The actual runtime entry is `dist/index.js` (see `package.json` → `main`).
+
+### Troubleshooting
+
+| Symptom | Cause / Fix |
+| --- | --- |
+| Plugin does not load after `bun install` | Verify `dist/index.js` exists. If not, run `bun run build`. |
+| `prepare` hook silently skipped | Requires bun ≥ 1.2.5. Upgrade with `bun upgrade`. |
+| Build fails: `Cannot find module '@opencode-ai/plugin'` | SDK drift — bump: `bun update @opencode-ai/plugin @opencode-ai/sdk`. |
+| First query is very slow | First run downloads the ~90MB `BAAI/bge-small-zh-v1.5` ONNX model from a HuggingFace mirror, cached at `~/.cache/huggingface/hub/`. |
 
 ---
 
