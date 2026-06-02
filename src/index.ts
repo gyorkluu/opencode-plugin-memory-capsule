@@ -12,7 +12,7 @@ import { glob } from 'glob';
 import { minimatch } from 'minimatch';
 import { z } from 'zod';
 
-const MAX_INJECTION_TOKENS = 4000;
+const MAX_INJECTION_TOKENS = 8000;
 
 // @opencode-ai/plugin@1.15.13's PluginInput is { client, project, directory,
 // worktree, ... }. The `directory` field is the current working directory
@@ -458,6 +458,30 @@ export const MemoryCapsulePlugin: Plugin = async (ctx, options) => {
     }
   };
 
+  /**
+   * When the first capsule is bigger than the remaining budget, we keep its
+   * scenario + pattern intact but truncate the invariant list (which is
+   * typically the longest field). The summary stays useful for the LLM.
+   */
+  const truncateCapsuleForBudget = (
+    cap: CognitiveCapsule,
+    budgetTokens: number
+  ): { text: string; tokens: number } => {
+    const invariant = cap.payload.invariantConstraint || '';
+    const lines = invariant.split('\n');
+    const baseText = `* **Cognitive Capsule: ${cap.title}**\n  - **Scenario**: ${cap.scenario}\n  - **Pattern**: ${cap.payload.defectPattern}\n  - **Invariant** (truncated):\n`;
+    let tokens = estimateTokenCount(baseText);
+    const accLines: string[] = [];
+    for (const line of lines) {
+      const lt = estimateTokenCount(line);
+      if (tokens + lt > budgetTokens) break;
+      accLines.push(line);
+      tokens += lt;
+    }
+    const out = baseText + accLines.join('\n');
+    return { text: out, tokens: estimateTokenCount(out) };
+  };
+
   const buildInjectionWithBudget = (
     capsules: CognitiveCapsule[],
     knowledge: Array<{ id: string; text: string; sourcePath: string; score: number }>
@@ -474,11 +498,25 @@ export const MemoryCapsulePlugin: Plugin = async (ctx, options) => {
     const selectedParts: string[] = [];
     const injectedIds = new Set<string>();
 
-    for (const capText of capsuleTexts) {
-      const tokens = estimateTokenCount(capText);
-      if (usedTokens + tokens > MAX_INJECTION_TOKENS) break;
-      selectedParts.push(capText);
-      usedTokens += tokens;
+    for (let i = 0; i < capsuleTexts.length; i++) {
+      const capText = capsuleTexts[i];
+      const cap = capsules[i];
+      let tokens = estimateTokenCount(capText);
+      if (usedTokens + tokens > MAX_INJECTION_TOKENS) {
+        // Either budget exhausted (this capsule would bust the limit) — but
+        // if no capsule has been injected yet, truncate the invariant section
+        // to fit a portion of the first capsule rather than dropping
+        // everything (since dropped = zero value to the user).
+        if (selectedParts.length === 0 && cap) {
+          const remaining = MAX_INJECTION_TOKENS - usedTokens
+          const truncated = truncateCapsuleForBudget(cap, remaining)
+          selectedParts.push(truncated.text)
+          usedTokens += truncated.tokens
+        }
+        break
+      }
+      selectedParts.push(capText)
+      usedTokens += tokens
     }
 
     for (let i = 0; i < knowledgeTexts.length; i++) {
